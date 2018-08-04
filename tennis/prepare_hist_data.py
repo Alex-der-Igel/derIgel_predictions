@@ -1,17 +1,45 @@
 import pandas as pd
 
 
+def get_surf(trnm):
+    if trnm.find(',') > 0:
+        trnm = trnm[trnm.find(',') + 2 : len(trnm)]   
+        
+        if trnm.find('-') * trnm.find('(') < 0:
+            trnm = trnm[0 : max(trnm.find('('), trnm.find('-')) - 1]
+        elif trnm.find('-') > 0:
+            trnm = trnm[0 : min(trnm.find('('), trnm.find('-')) - 1]
+            
+    elif trnm.find('Davis') >= 0:
+        trnm = 'clay'
+        
+    else:
+        trnm = 'none'
+        
+    return trnm
+
+
+print(get_surf('French Open (France), clay - 1/16-finals'))
+print(get_surf('Basel (Switzerland), hard (indoor) - Quarter-finals'))
+print(get_surf('Hurlingham (United Kingdom), grass'))
+print(get_surf('Davis Cup - World Group (World)'))
+
 dateparse = lambda x: pd.datetime.strptime(x, '%d.%m.%Y %H:%M')
 
-cin = pd.read_csv('matches.csv',  # Это то, куда вы скачали файл
+cin = pd.read_csv('data/matches.csv',  # Это то, куда вы скачали файл
                        sep=';', 
                        parse_dates=['date'], date_parser=dateparse, index_col='Unnamed: 0')
 
-cin_st = pd.read_csv('match_stats.csv',  # Это то, куда вы скачали файл
+cin_st = pd.read_csv('data/match_stats.csv',  # Это то, куда вы скачали файл
                        sep=';', 
                        index_col='Unnamed: 0')
 cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
 cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
+
+cin['surf'] = cin.apply(lambda x: get_surf(x['tournament']), axis = 1)
+
+cin.to_csv('cin_n.csv', sep = ';')
+
 
 cin_st = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration']].groupby(['id_match']).sum()
 
