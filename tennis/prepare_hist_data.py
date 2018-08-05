@@ -10,19 +10,38 @@ def get_surf(trnm):
         elif trnm.find('-') > 0:
             trnm = trnm[0 : min(trnm.find('('), trnm.find('-')) - 1]
             
-    elif trnm.find('Davis') >= 0:
-        trnm = 'clay'
-        
+    #elif trnm.find('Davis') >= 0:
+    #    trnm = 'clay'
     else:
         trnm = 'none'
         
     return trnm
 
 
-print(get_surf('French Open (France), clay - 1/16-finals'))
-print(get_surf('Basel (Switzerland), hard (indoor) - Quarter-finals'))
-print(get_surf('Hurlingham (United Kingdom), grass'))
-print(get_surf('Davis Cup - World Group (World)'))
+def get_stage(trnm, trnm_l):
+    stage = ''
+    if trnm.find(',') > 0:
+        trnm = trnm[trnm.find(',') + 2 : len(trnm)]
+        if trnm.find('-') > 0:
+            stage = trnm[trnm.find('-') + 2 : len(trnm)]
+    #else:
+        #trnm = trnm[8 : trnm[8: len(trnm)].find('/')]
+    if stage == '':
+        stage = trnm_l[8 : trnm_l[8: len(trnm_l)].find('/') + 8]
+               
+    if trnm.find('Qualification') > 0:
+        stage = 'Qualification ' + stage
+        
+    if trnm_l.find('boys-singles') > 0:
+        stage = 'boys-singles ' + stage
+     
+    return stage
+
+
+print(get_stage('French Open (France), clay - 1/16-finals', ''))
+print(get_stage('Basel (Switzerland), hard (indoor) - Quarter-finals', ''))
+print(get_stage('Hurlingham (United Kingdom), grass', ''))
+print(get_stage('Davis Cup - World Group (World)', ''))
 
 dateparse = lambda x: pd.datetime.strptime(x, '%d.%m.%Y %H:%M')
 
@@ -37,6 +56,8 @@ cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away']
 cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
 
 cin['surf'] = cin.apply(lambda x: get_surf(x['tournament']), axis = 1)
+cin['stage'] = cin.apply(lambda x: get_stage(x['tournament'], x['tournament_link']), axis = 1)
+
 
 cin.to_csv('cin_n.csv', sep = ';')
 
