@@ -1,5 +1,5 @@
 import pandas as pd
-
+import math
 
 def get_surf(trnm):
     if trnm.find(',') > 0:
@@ -38,10 +38,46 @@ def get_stage(trnm, trnm_l):
     return stage
 
 
-print(get_stage('French Open (France), clay - 1/16-finals', ''))
-print(get_stage('Basel (Switzerland), hard (indoor) - Quarter-finals', ''))
-print(get_stage('Hurlingham (United Kingdom), grass', ''))
-print(get_stage('Davis Cup - World Group (World)', ''))
+def get_last_matches(cin, p_id, dt, n):
+    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) , ['id_match', 'id_player_home', 'id_player_away', 'date']].sort_values(by='date', ascending=False)[0 : n]
+    
+    return prev
+
+#return list of expected value and dispersion for list contains 8 elements
+def calc_exp_val_8(scores):
+    exp_val = 0
+    disp = 0
+    
+    if len(scores) != 8:
+        return -1
+    
+    for i in range(0, len(scores)):
+        if  i < 2:
+            disp += scores[i] * scores[i] * 8
+            exp_val += scores[i] * 8
+        
+        elif i < 4:
+            disp += scores[i] * scores[i] * 4
+            exp_val += scores[i] * 4
+        
+        elif i < 6:
+            disp += scores[i] * scores[i] * 2
+            exp_val += scores[i] * 2
+        
+        else:
+            disp += scores[i] * scores[i]
+            exp_val += scores[i]
+        
+        i += 1
+   
+    exp_val = exp_val / 30
+    disp = math.sqrt(math.fabs(exp_val * exp_val - disp / 30))
+    
+    print(exp_val, ' ', disp)
+       
+    return [exp_val, disp]
+
+
 
 dateparse = lambda x: pd.datetime.strptime(x, '%d.%m.%Y %H:%M')
 
@@ -52,6 +88,7 @@ cin = pd.read_csv('data/matches.csv',  # Это то, куда вы скачал
 cin_st = pd.read_csv('data/match_stats.csv',  # Это то, куда вы скачали файл
                        sep=';', 
                        index_col='Unnamed: 0')
+
 cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
 cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
 
@@ -64,6 +101,10 @@ cin.to_csv('cin_n.csv', sep = ';')
 
 cin_st = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration']].groupby(['id_match']).sum()
 
+
+ex_d = calc_exp_val_8([1, 1, 1, 1, 1, 1, 1, 2])
+
+print(ex_d[0], ' ', ex_d[1])
 
 
 t_h = cin.loc[cin['id_match'] == 'by8oXmyh'].iloc[0]['id_player_home']
