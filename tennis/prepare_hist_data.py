@@ -39,7 +39,8 @@ def get_stage(trnm, trnm_l):
 
 
 def get_last_matches(cin, p_id, dt, n):
-    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) , ['id_match', 'id_player_home', 'id_player_away', 'date']].sort_values(by='date', ascending=False)[0 : n]
+    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) , ['id_match', 'id_player_home', 'id_player_away', 'date']].sort_values(by='date', ascending=False)
+    prev = prev[0 : min(n, len(prev))]
     
     return prev
 
@@ -78,6 +79,26 @@ def calc_exp_val_8(scores):
     return [exp_val, disp]
 
 
+def swap(row, p_id):
+    if row['id_player_home'] == p_id:
+        return row['id_player_home'], row['id_player_away']
+    else:
+        return row['id_player_away'], row['id_player_home']
+
+
+def calc_player_elo_all_time(cin, cin_st, player_id, dt):
+    matches = get_last_matches(cin, player_id, dt, 20)
+    
+    matches = pd.merge(matches, cin_st, left_on=  ['id_match'], right_on= ['id_match'], how = 'left')
+    matches.to_csv('matches_elo_prev.csv', sep = ';')
+ 
+    
+    matches['id_player_home'], matches['id_player_away']  = zip(*matches.apply(lambda x: swap(x, player_id), axis = 1))
+    
+    matches.to_csv('matches_elo.csv', sep = ';')
+    
+    
+    return 0
 
 dateparse = lambda x: pd.datetime.strptime(x, '%d.%m.%Y %H:%M')
 
@@ -92,6 +113,10 @@ cin_st = pd.read_csv('data/match_stats.csv',  # Это то, куда вы ск�
 cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
 cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
 
+cin_st_wl = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration']].groupby(['id_match']).sum()
+cin_st_wl['result'] = cin_st_wl.apply(lambda x: 1 if x['set_home'] > x['set_away'] else 0, axis = 1)
+
+
 cin['surf'] = cin.apply(lambda x: get_surf(x['tournament']), axis = 1)
 cin['stage'] = cin.apply(lambda x: get_stage(x['tournament'], x['tournament_link']), axis = 1)
 
@@ -99,7 +124,7 @@ cin['stage'] = cin.apply(lambda x: get_stage(x['tournament'], x['tournament_link
 cin.to_csv('cin_n.csv', sep = ';')
 
 
-cin_st = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration']].groupby(['id_match']).sum()
+calc_player_elo_all_time(cin, cin_st_wl, '/player/nadal-rafael/xUwlUnRK', dateparse('10.09.2018  10:15'))
 
 
 ex_d = calc_exp_val_8([1, 1, 1, 1, 1, 1, 1, 2])
@@ -123,7 +148,6 @@ prev_h = pd.merge(prev_h, cin_st, left_on=  ['id_match'],
                                   how = 'left')
 
 
-prev_h['game_t_a'] = prev_h.apply(lambda x: x['game_home'] if x['id_player_home'] == t_a else x['game_away'], axis = 1)
 
 
 print(prev_h)
