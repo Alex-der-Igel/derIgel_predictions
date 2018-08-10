@@ -81,25 +81,74 @@ def calc_exp_val_8(scores):
 
 def swap(row, p_id):
     if row['id_player_home'] == p_id:
-        return row['id_player_home'], row['id_player_away']
+        return row['id_player_home'], row['id_player_away'], row['game_home'], row['game_away'], row['set_home'], row['set_away'], row['result']
     else:
-        return row['id_player_away'], row['id_player_home']
+        return row['id_player_away'], row['id_player_home'], row['game_away'], row['game_home'], row['set_away'], row['set_home'], 1 - row['result']
 
 
 def calc_player_elo_all_time(cin, cin_st, player_id, dt):
-    matches = get_last_matches(cin, player_id, dt, 20)
+    #matches = get_last_matches(cin, player_id, dt, 20)
     
-    matches = pd.merge(matches, cin_st, left_on=  ['id_match'], right_on= ['id_match'], how = 'left')
-    matches.to_csv('matches_elo_prev.csv', sep = ';')
- 
+    matches = pd.merge(cin, cin_st, left_on=  ['id_match'], right_on= ['id_match'], how = 'left').sort_values('date', ascending=True)
+    matches['elo_home'] = 0
+    matches['elo_away'] = 0
     
-    matches['id_player_home'], matches['id_player_away']  = zip(*matches.apply(lambda x: swap(x, player_id), axis = 1))
+    for i in range(0, len(matches)):#len(matches)
+        print(i)
+        #определение индекса строки с предидущим матчем для игрока 1   
+        p_h = matches.iloc[i]['id_player_home']
+        p_a = matches.iloc[i]['id_player_away']
+        dt  = matches.iloc[i]['date']
+        m_id = matches.index[i]
+         
+                  
+        if not matches.loc[(matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
+            prev_match_index_player_home = matches.loc[(matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
+        else:
+            prev_match_index_player_home = -1
+            
+        if not matches.loc[(matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
+            prev_match_index_player_away = matches.loc[(matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
+        else:
+            prev_match_index_player_away = -1        
+        
+        if prev_match_index_player_home == -1:
+            matches.at[m_id, 'elo_home'] = 1500
+        else:     
+            if p_h == matches.at[prev_match_index_player_home, 'id_player_home']:
+                matches.at[m_id, 'elo_home'] = matches.at[prev_match_index_player_home, 'elo_home'] + k_factor(matches.at[prev_match_index_player_home, 'elo_home']) * (matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_away'] - matches.at[prev_match_index_player_home, 'elo_home']) / 400))) 
+            else:
+                matches.at[m_id, 'elo_home'] = matches.at[prev_match_index_player_home, 'elo_away'] + k_factor(matches.at[prev_match_index_player_home, 'elo_away']) * (1 - matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_home'] - matches.at[prev_match_index_player_home, 'elo_away']) / 400))) 
+            
+        if prev_match_index_player_away == -1:
+            matches.at[m_id, 'elo_away'] = 1500
+        else:
+            if p_a == matches.at[prev_match_index_player_away, 'id_player_away']:
+                matches.at[m_id, 'elo_away'] = matches.at[prev_match_index_player_away, 'elo_away'] + k_factor(matches.at[prev_match_index_player_away, 'elo_away']) * (1 - matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_home'] - matches.at[prev_match_index_player_away, 'elo_away']) / 400))) 
+            else:
+                matches.at[m_id, 'elo_away'] = matches.at[prev_match_index_player_away, 'elo_home'] + k_factor(matches.at[prev_match_index_player_away, 'elo_home']) * (matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_away'] - matches.at[prev_match_index_player_away, 'elo_home']) / 400))) 
+#                matches.at[m_id, 'elo_away'] = matches.at[prev_match_index_player_away, 'elo_home'] + ((-1) ** (matches.at[prev_match_index_player_away, 'result'] + 1)) * 10
+            
+        
+    #EZiZKzMq
+    
+    '''
+    matches['id_player_home'], matches['id_player_away'],\
+    matches['game_home'], matches['game_away'], \
+    matches['set_home'], matches['set_away'], matches['result'] = zip(*matches.apply(lambda x: swap(x, player_id), axis = 1))
+    matches['elo'] = 0
+    matches.at[len(matches) - 1, 'elo'] = 1500
+    '''
     
     matches.to_csv('matches_elo.csv', sep = ';')
     
     
     return 0
 
+#def k_factor(r):
+#    return (1 + 18 / (1 + 2 ** ((r - 1500) / 63)))
+
+k_factor = lambda x: (1 + 18 / (1 + 2 ** ((x - 1500) / 103)))
 dateparse = lambda x: pd.datetime.strptime(x, '%d.%m.%Y %H:%M')
 
 cin = pd.read_csv('data/matches.csv',  # Это то, куда вы скачали файл
@@ -147,8 +196,3 @@ prev_h = pd.merge(prev_h, cin_st, left_on=  ['id_match'],
                                   right_on= ['id_match'],
                                   how = 'left')
 
-
-
-
-print(prev_h)
-prev_h.to_csv('prev_h.csv', sep = ';')
