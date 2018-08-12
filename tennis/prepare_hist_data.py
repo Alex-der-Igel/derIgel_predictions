@@ -3,6 +3,30 @@ import math
 import arc
 from pathlib import Path 
 import numpy as np
+from datetime import datetime
+
+
+
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
+        
 
 k_factor = lambda x: (20 + 120 / (1 + 1.7 ** ((x - 1500) / 130)))
 
@@ -26,7 +50,7 @@ def tour_adj(tour):
         return 0.7
 
 def stage_adj(stage):
-    if stage.find('boys-singles') >= 0:
+    if stage.find('boys-singles') >= 0 or stage.find('girls-singles') >= 0:
         return 0.6
     elif stage.find('Qualification') >= 0:
         return 0.8
@@ -74,7 +98,10 @@ def get_stage(trnm, trnm_l):
         
     if trnm_l.find('boys-singles') >= 0:
         stage = 'boys-singles ' + stage
-     
+    
+    if trnm_l.find('girls-singles') >= 0:
+        stage = 'girls-singles ' + stage
+    
     return stage
 
 
@@ -148,12 +175,19 @@ def calc_player_elo_all_time(cin, cin_st, cin_tour_type):
     matches['elo_home'] = 0
     matches['elo_away'] = 0
     
+    matches['elo_rec_home'] = 0
+    matches['elo_rec_away'] = 0
+    
+    matches['elo_surf_home'] = 0
+    matches['elo_surf_away'] = 0
+    
     for i in range(0, len(matches)):#len(matches)
         print(i)
         #определение индекса строки с предидущим матчем для игрока 1   
         p_h = matches.iloc[i]['id_player_home']
         p_a = matches.iloc[i]['id_player_away']
         dt  = matches.iloc[i]['date']
+        srf = matches.iloc[i]['surf']
         m_id = matches.index[i]
          
                   
@@ -169,25 +203,71 @@ def calc_player_elo_all_time(cin, cin_st, cin_tour_type):
         
         if prev_match_index_player_home == -1:
             matches.at[m_id, 'elo_home'] = 1500
+            matches.at[m_id, 'elo_rec_home'] = 1500
         else:     
             if p_h == matches.at[prev_match_index_player_home, 'id_player_home']:            
                 matches.at[m_id, 'elo_home'] = matches.at[prev_match_index_player_home, 'elo_home'] + stage_adj(matches.at[prev_match_index_player_home, 'stage']) * tour_adj(matches.at[prev_match_index_player_home, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_home, 'elo_home']) * (matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_away'] - matches.at[prev_match_index_player_home, 'elo_home']) / 400))) 
+                matches.at[m_id, 'elo_rec_home'] = matches.at[prev_match_index_player_home, 'elo_home'] + elo_time_adj(matches.at[prev_match_index_player_home, 'date']) * stage_adj(matches.at[prev_match_index_player_home, 'stage']) * tour_adj(matches.at[prev_match_index_player_home, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_home, 'elo_home']) * (matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_away'] - matches.at[prev_match_index_player_home, 'elo_home']) / 400))) 
             else:
                 matches.at[m_id, 'elo_home'] = matches.at[prev_match_index_player_home, 'elo_away'] + stage_adj(matches.at[prev_match_index_player_home, 'stage']) * tour_adj(matches.at[prev_match_index_player_home, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_home, 'elo_away']) * (1 - matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_home'] - matches.at[prev_match_index_player_home, 'elo_away']) / 400))) 
+                matches.at[m_id, 'elo_rec_home'] = matches.at[prev_match_index_player_home, 'elo_away'] + elo_time_adj(matches.at[prev_match_index_player_home, 'date']) * stage_adj(matches.at[prev_match_index_player_home, 'stage']) * tour_adj(matches.at[prev_match_index_player_home, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_home, 'elo_away']) * (1 - matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_home'] - matches.at[prev_match_index_player_home, 'elo_away']) / 400))) 
             
         if prev_match_index_player_away == -1:
             matches.at[m_id, 'elo_away'] = 1500
+            matches.at[m_id, 'elo_rec_away'] = 1500
         else:
             if p_a == matches.at[prev_match_index_player_away, 'id_player_away']:
                 matches.at[m_id, 'elo_away'] = matches.at[prev_match_index_player_away, 'elo_away'] + stage_adj(matches.at[prev_match_index_player_away, 'stage']) * tour_adj(matches.at[prev_match_index_player_away, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_away, 'elo_away']) * (1 - matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_home'] - matches.at[prev_match_index_player_away, 'elo_away']) / 400))) 
+                matches.at[m_id, 'elo_rec_away'] = matches.at[prev_match_index_player_away, 'elo_away'] + elo_time_adj(matches.at[prev_match_index_player_away, 'date']) * stage_adj(matches.at[prev_match_index_player_away, 'stage']) * tour_adj(matches.at[prev_match_index_player_away, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_away, 'elo_away']) * (1 - matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_home'] - matches.at[prev_match_index_player_away, 'elo_away']) / 400))) 
             else:
                 matches.at[m_id, 'elo_away'] = matches.at[prev_match_index_player_away, 'elo_home'] + stage_adj(matches.at[prev_match_index_player_away, 'stage']) * tour_adj(matches.at[prev_match_index_player_away, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_away, 'elo_home']) * (matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_away'] - matches.at[prev_match_index_player_away, 'elo_home']) / 400))) 
+                matches.at[m_id, 'elo_rec_away'] = matches.at[prev_match_index_player_away, 'elo_home'] + elo_time_adj(matches.at[prev_match_index_player_away, 'date']) * stage_adj(matches.at[prev_match_index_player_away, 'stage']) * tour_adj(matches.at[prev_match_index_player_away, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_away, 'elo_home']) * (matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_away'] - matches.at[prev_match_index_player_away, 'elo_home']) / 400))) 
              
-#                matches.at[m_id, 'elo_away'] = matches.at[prev_match_index_player_away, 'elo_home'] + ((-1) ** (matches.at[prev_match_index_player_away, 'result'] + 1)) * 10
+
+        #расчет эло для текущей поверхности
+        
+        if not matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
+            prev_match_index_player_home = matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
+        else:
+            prev_match_index_player_home = -1
+            
+        if not matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
+            prev_match_index_player_away = matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
+        else:
+            prev_match_index_player_away = -1        
+        
+        if prev_match_index_player_home == -1:
+            matches.at[m_id, 'elo_surf_home'] = 1500
+            
+        else:     
+            if p_h == matches.at[prev_match_index_player_home, 'id_player_home']:            
+                matches.at[m_id, 'elo_surf_home'] = matches.at[prev_match_index_player_home, 'elo_surf_home'] + stage_adj(matches.at[prev_match_index_player_home, 'stage']) * tour_adj(matches.at[prev_match_index_player_home, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_home, 'elo_surf_home']) * (matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_surf_away'] - matches.at[prev_match_index_player_home, 'elo_surf_home']) / 400))) 
+                
+            else:
+                matches.at[m_id, 'elo_surf_home'] = matches.at[prev_match_index_player_home, 'elo_surf_away'] + stage_adj(matches.at[prev_match_index_player_home, 'stage']) * tour_adj(matches.at[prev_match_index_player_home, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_home, 'elo_surf_away']) * (1 - matches.at[prev_match_index_player_home, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_home, 'elo_surf_home'] - matches.at[prev_match_index_player_home, 'elo_surf_away']) / 400))) 
+                
+            
+        if prev_match_index_player_away == -1:
+            matches.at[m_id, 'elo_surf_away'] = 1500
+            
+        else:
+            if p_a == matches.at[prev_match_index_player_away, 'id_player_away']:
+                matches.at[m_id, 'elo_surf_away'] = matches.at[prev_match_index_player_away, 'elo_surf_away'] + stage_adj(matches.at[prev_match_index_player_away, 'stage']) * tour_adj(matches.at[prev_match_index_player_away, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_away, 'elo_surf_away']) * (1 - matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_surf_home'] - matches.at[prev_match_index_player_away, 'elo_surf_away']) / 400))) 
+            else:
+                matches.at[m_id, 'elo_surf_away'] = matches.at[prev_match_index_player_away, 'elo_surf_home'] + stage_adj(matches.at[prev_match_index_player_away, 'stage']) * tour_adj(matches.at[prev_match_index_player_away, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_away, 'elo_surf_home']) * (matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_surf_away'] - matches.at[prev_match_index_player_away, 'elo_surf_home']) / 400))) 
+                
    
     matches.to_csv('matches_elo.csv', sep = ';')
    
     return matches
+
+def elo_time_adj(x):
+    if (datetime.now() - x).total_seconds() / 60 / 60 / 24 < 180:
+        return 4
+    elif (datetime.now() - x).total_seconds() / 60 / 60 / 24 < 365:
+        return 2
+    else:
+        return 1
 
 def calc(matches):
     
@@ -200,8 +280,10 @@ def calc(matches):
     matches['w_home'] = 0.
     matches['w_home_d'] = 0.
     matches['freq_home'] = 0.
-    
-    
+    matches['elo_home_played'] = 0
+    matches['elo_home_win'] = 0
+    matches['elo_home_lose'] = 0
+    matches['fatigue_home'] = 0.
     
     matches['str_away'] = 0.
     matches['str_away_d'] = 0.
@@ -212,11 +294,15 @@ def calc(matches):
     matches['w_away'] = 0.
     matches['w_away_d'] = 0.
     matches['freq_away'] = 0.
-    
+    matches['elo_away_played'] = 0
+    matches['elo_away_win'] = 0
+    matches['elo_away_lose'] = 0
+    matches['fatigue_away'] = 0.
     
     for i in range(0, len(matches)):#len(matches) 61176
         
-        print(i)
+        printProgressBar(i, len(matches), prefix = 'Progress:', suffix = 'Complete ' + str(i) + ' from ' + str(len(matches)), length = 20)
+        
         p_h = matches.iloc[i]['id_player_home']
         p_a = matches.iloc[i]['id_player_away']
         dt  = matches.iloc[i]['date']
@@ -232,12 +318,20 @@ def calc(matches):
         p1_str_rec = 0.
         p1_str_rec_d = 0.
         p1_freq = 0.
+        p1_elo_pl = 0
+        p1_elo_w = 0
+        p1_elo_l = 0
+        p1_fat = 0.
         
         p2_str = 0.
         p2_str_d = 0.
         p2_str_rec = 0.
         p2_str_rec_d = 0.
         p2_freq = 0.
+        p2_elo_pl = 0
+        p2_elo_w = 0
+        p2_elo_l = 0
+        p2_fat = 0.
         
         p1_w = 0.
         p1_l = 0.
@@ -254,6 +348,14 @@ def calc(matches):
         p1_freq = (match.iloc[0]['date'] - match.iloc[7]['date']) / np.timedelta64(1, 'D')
         p1_l, p1_l_d  = calc_exp_val_simple((match.loc[match['game_home'] < match['game_away'], 'game_home']-match.loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] < match['game_away']]))
         p1_w, p1_w_d  = calc_exp_val_simple((match.loc[match['game_home'] > match['game_away'], 'game_home']-match.loc[match['game_home'] > match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] > match['game_away']]))
+        p1_elo_pl = calc_exp_val_simple(match['elo_away'].values, 8)[0]
+        p1_elo_w = calc_exp_val_simple(match.loc[match['game_home'] > match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] > match['game_away']]))[0]
+        p1_elo_l = calc_exp_val_simple(match.loc[match['game_home'] < match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] < match['game_away']]))[0]
+        p1_fat = (match.iloc[0]['game_home'] + match.iloc[0]['game_away']) * (0.7 ** ((dt - match.iloc[0]['date']).total_seconds() / 60 / 60 / 24)) + \
+                 (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60 / 60 / 24)) + \
+                 (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60 / 60 / 24)) + \
+                 (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60 / 60 / 24))
+        
         match = get_last_matches(matches, p_a, dt, 8)
         
         if(len(match) < 8):
@@ -266,6 +368,13 @@ def calc(matches):
         p2_freq = (match.iloc[0]['date'] - match.iloc[7]['date']) / np.timedelta64(1, 'D')
         p2_l, p2_l_d = calc_exp_val_simple((match.loc[match['game_home'] < match['game_away'], 'game_home']-match.loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] < match['game_away']]))
         p2_w, p2_w_d  = calc_exp_val_simple((match.loc[match['game_home'] > match['game_away'], 'game_home']-match.loc[match['game_home'] > match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] > match['game_away']]))
+        p2_elo_pl = calc_exp_val_simple(match['elo_away'].values, 8)[0]
+        p2_elo_w = calc_exp_val_simple(match.loc[match['game_home'] > match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] > match['game_away']]))[0]
+        p2_elo_l = calc_exp_val_simple(match.loc[match['game_home'] < match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] < match['game_away']]))[0]
+        p2_fat = (match.iloc[0]['game_home'] + match.iloc[0]['game_away']) * (0.7 ** ((dt - match.iloc[0]['date']).total_seconds() / 60 / 60 / 24)) + \
+                 (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60 / 60 / 24)) + \
+                 (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60 / 60 / 24)) + \
+                 (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60 / 60 / 24))
         
         matches.at[i, 'str_home'] = p1_str
         matches.at[i, 'str_home_d'] = p1_str_d
@@ -276,6 +385,10 @@ def calc(matches):
         matches.at[i, 'w_home'] = p1_w
         matches.at[i, 'w_home_d'] = p1_w_d
         matches.at[i, 'freq_home'] = p1_freq
+        matches.at[i, 'elo_home_played'] = p1_elo_pl
+        matches.at[i, 'elo_home_win'] = p1_elo_w
+        matches.at[i, 'elo_home_lose'] = p1_elo_l
+        matches.at[i,'fatigue_home'] = p1_fat        
         
         matches.at[i, 'str_away'] = p2_str
         matches.at[i, 'str_away_d'] = p2_str_d
@@ -286,6 +399,10 @@ def calc(matches):
         matches.at[i, 'w_away'] = p2_w
         matches.at[i, 'w_away_d'] = p2_w_d
         matches.at[i, 'freq_away'] = p2_freq
+        matches.at[i, 'elo_away_played'] = p2_elo_pl
+        matches.at[i, 'elo_away_win'] = p2_elo_w
+        matches.at[i, 'elo_away_lose'] = p2_elo_l
+        matches.at[i,'fatigue_away'] = p2_fat
 
     return 0
 
@@ -293,15 +410,21 @@ def calc(matches):
 
 if Path('data/matches_elo.csv').exists():
     cin_elo = pd.read_csv('data/matches_elo.csv', sep=';', parse_dates=['date'], date_parser=dateparse_sec, index_col='Unnamed: 0')
-    cin_elo.loc[cin_elo['odd_home'] == '-' , 'odd_home'] = 1
-    cin_elo.loc[cin_elo['odd_away'] == '-' , 'odd_away'] = 1
+    #cin_elo.loc[cin_elo['odd_home'] == '-' , 'odd_home'] = 1
+    #cin_elo.loc[cin_elo['odd_away'] == '-' , 'odd_away'] = 1
 else:
     #читаем входные файлы
-    cin = pd.read_csv('data/matches.csv', sep=';', parse_dates=['date'], date_parser=dateparse, index_col='Unnamed: 0')
+    cin_atp = pd.read_csv('data/matches_atp.csv', sep=';', parse_dates=['date'], date_parser=dateparse, index_col='Unnamed: 0')
+    cin_st_atp = pd.read_csv('data/match_stats_atp.csv', sep=';', index_col='Unnamed: 0')
+    tournaments_type_atp = pd.read_csv('data/tourn_men.csv', sep=';') #типы турниров: GF, MA ...
     
-    cin_st = pd.read_csv('data/match_stats.csv', sep=';', index_col='Unnamed: 0')
+    cin_wta = pd.read_csv('data/matches_wta.csv', sep=';', parse_dates=['date'], date_parser=dateparse, index_col='Unnamed: 0')
+    cin_st_wta = pd.read_csv('data/match_stats_wta.csv', sep=';', index_col='Unnamed: 0')
+    tournaments_type_wta = pd.read_csv('data/tourn_women.csv', sep=';') #типы турниров: GF, MA ...
     
-    tournaments_type = pd.read_csv('data/tourn_men.csv', sep=';') #типы турниров: GF, MA ...
+    cin = pd.concat([cin_atp, cin_wta], ignore_index=True)
+    cin_st = pd.concat([cin_st_atp, cin_st_wta], ignore_index=True)
+    tournaments_type = pd.concat([tournaments_type_atp, tournaments_type_wta], ignore_index=True)
 
     #добавляем поля кто выиграл сет
     cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
@@ -318,6 +441,11 @@ else:
     #производим расчет рейтингов эло по всем матчам
     cin_elo = calc_player_elo_all_time(cin, cin_st_wl, tournaments_type)
     
+ 
+#cin_elo['year'] = cin_elo['date'].apply(lambda x: x.year)
+#atp = pd.read_csv('data/ranks_atp.csv', sep=';', index_col='Unnamed: 0')
+#
+#cin_elo = pd.merge(cin_elo, atp, left_on =  ['id_player_home', 'year'], right_on= ['id_player', 'year'], how = 'left')
     
 calc(cin_elo)
 
