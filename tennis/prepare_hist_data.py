@@ -226,13 +226,13 @@ def calc_player_elo_all_time(cin, cin_st, cin_tour_type):
 
         #расчет эло для текущей поверхности
         
-        if not matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
-            prev_match_index_player_home = matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
+        if not matches.loc[(matches['surf'] == srf) & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
+            prev_match_index_player_home = matches.loc[(matches['surf'] == srf) & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_h)|(matches['id_player_away'] == p_h)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
         else:
             prev_match_index_player_home = -1
             
-        if not matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
-            prev_match_index_player_away = matches.loc[matches['surf'] == srf & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
+        if not matches.loc[(matches['surf'] == srf) & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False).empty:
+            prev_match_index_player_away = matches.loc[(matches['surf'] == srf) & (matches['result'].notnull()) & (matches['date'] < dt) & ((matches['id_player_home'] == p_a)|(matches['id_player_away'] == p_a)) , ['id_match','date']].sort_values(by='date', ascending=False)['date'].idxmax()
         else:
             prev_match_index_player_away = -1        
         
@@ -257,7 +257,7 @@ def calc_player_elo_all_time(cin, cin_st, cin_tour_type):
                 matches.at[m_id, 'elo_surf_away'] = matches.at[prev_match_index_player_away, 'elo_surf_home'] + stage_adj(matches.at[prev_match_index_player_away, 'stage']) * tour_adj(matches.at[prev_match_index_player_away, 'tournament_type']) * k_factor(matches.at[prev_match_index_player_away, 'elo_surf_home']) * (matches.at[prev_match_index_player_away, 'result'] - 1 / (1 + 10 ** ((matches.at[prev_match_index_player_away, 'elo_surf_away'] - matches.at[prev_match_index_player_away, 'elo_surf_home']) / 400))) 
                 
    
-    matches.to_csv('matches_elo.csv', sep = ';')
+    matches.to_csv('data/matches_elo.csv', sep = ';')
    
     return matches
 
@@ -271,33 +271,33 @@ def elo_time_adj(x):
 
 def calc(matches):
     
-    matches['str_home'] = 0.
-    matches['str_home_d'] = 0.
-    matches['str_home_rec'] = 0.
-    matches['str_home_rec_d'] = 0.
-    matches['l_home'] = 0.
-    matches['l_home_d'] = 0.
-    matches['w_home'] = 0.
-    matches['w_home_d'] = 0.
-    matches['freq_home'] = 0.
-    matches['elo_home_played'] = 0
-    matches['elo_home_win'] = 0
-    matches['elo_home_lose'] = 0
-    matches['fatigue_home'] = 0.
+    matches.loc[:, 'str_home'] = 0.
+    matches.loc[:,'str_home_d'] = 0.
+    matches.loc[:,'str_home_rec'] = 0.
+    matches.loc[:,'str_home_rec_d'] = 0.
+    matches.loc[:,'l_home'] = 0.
+    matches.loc[:,'l_home_d'] = 0.
+    matches.loc[:,'w_home'] = 0.
+    matches.loc[:,'w_home_d'] = 0.
+    matches.loc[:,'freq_home'] = 0.
+    matches.loc[:,'elo_home_played'] = 0
+    matches.loc[:,'elo_home_win'] = 0
+    matches.loc[:,'elo_home_lose'] = 0
+    matches.loc[:,'fatigue_home'] = 0.
     
-    matches['str_away'] = 0.
-    matches['str_away_d'] = 0.
-    matches['str_away_rec'] = 0.
-    matches['str_away_rec_d'] = 0.
-    matches['l_away'] = 0.
-    matches['l_away_d'] = 0.
-    matches['w_away'] = 0.
-    matches['w_away_d'] = 0.
-    matches['freq_away'] = 0.
-    matches['elo_away_played'] = 0
-    matches['elo_away_win'] = 0
-    matches['elo_away_lose'] = 0
-    matches['fatigue_away'] = 0.
+    matches.loc[:,'str_away'] = 0.
+    matches.loc[:,'str_away_d'] = 0.
+    matches.loc[:,'str_away_rec'] = 0.
+    matches.loc[:,'str_away_rec_d'] = 0.
+    matches.loc[:,'l_away'] = 0.
+    matches.loc[:,'l_away_d'] = 0.
+    matches.loc[:,'w_away'] = 0.
+    matches.loc[:,'w_away_d'] = 0.
+    matches.loc[:,'freq_away'] = 0.
+    matches.loc[:,'elo_away_played'] = 0
+    matches.loc[:,'elo_away_win'] = 0
+    matches.loc[:,'elo_away_lose'] = 0
+    matches.loc[:,'fatigue_away'] = 0.
     
     for i in range(0, len(matches)):#len(matches) 61176
         
@@ -409,29 +409,37 @@ def calc(matches):
 
 
 if Path('data/matches_elo.csv').exists():
-    cin_elo = pd.read_csv('data/matches_elo.csv', sep=';', parse_dates=['date'], date_parser=dateparse_sec, index_col='Unnamed: 0')
-    #cin_elo.loc[cin_elo['odd_home'] == '-' , 'odd_home'] = 1
-    #cin_elo.loc[cin_elo['odd_away'] == '-' , 'odd_away'] = 1
+    cin_elo = pd.read_csv('data/matches_elo.csv', sep=';', parse_dates=['date'], date_parser=dateparse_sec, index_col = 0)
 else:
     #читаем входные файлы
-    cin_atp = pd.read_csv('data/matches_atp.csv', sep=';', parse_dates=['date'], date_parser=dateparse, index_col='Unnamed: 0')
-    cin_st_atp = pd.read_csv('data/match_stats_atp.csv', sep=';', index_col='Unnamed: 0')
+    cin_atp = pd.read_csv('data/matches_atp.csv', sep=';', parse_dates=['date'], date_parser=dateparse, index_col = 0)
+    cin_st_atp = pd.read_csv('data/match_stats_atp.csv', sep=';', index_col = 0)
     tournaments_type_atp = pd.read_csv('data/tourn_men.csv', sep=';') #типы турниров: GF, MA ...
+    cin_atp.loc[cin_atp['odd_home'] == '-' , 'odd_home'] = 1
+    cin_atp.loc[cin_atp['odd_away'] == '-' , 'odd_away'] = 1 
+    cin_atp['odd_home'] = pd.to_numeric(cin_atp['odd_home'])
+    cin_atp['odd_away'] = pd.to_numeric(cin_atp['odd_away'])
     
-    cin_wta = pd.read_csv('data/matches_wta.csv', sep=';', parse_dates=['date'], date_parser=dateparse, index_col='Unnamed: 0')
-    cin_st_wta = pd.read_csv('data/match_stats_wta.csv', sep=';', index_col='Unnamed: 0')
+    cin_wta = pd.read_csv('data/matches_wta.csv', sep=';', parse_dates=['date'], date_parser=dateparse, index_col = 0)
+    cin_st_wta = pd.read_csv('data/match_stats_wta.csv', sep=';', index_col = 0)
     tournaments_type_wta = pd.read_csv('data/tourn_women.csv', sep=';') #типы турниров: GF, MA ...
+    cin_wta.loc[cin_wta['odd_home'] == '-' , 'odd_home'] = 1
+    cin_wta.loc[cin_wta['odd_away'] == '-' , 'odd_away'] = 1 
+    cin_wta['odd_home'] = pd.to_numeric(cin_wta['odd_home'])
+    cin_wta['odd_away'] = pd.to_numeric(cin_wta['odd_away'])
     
     cin = pd.concat([cin_atp, cin_wta], ignore_index=True)
     cin_st = pd.concat([cin_st_atp, cin_st_wta], ignore_index=True)
     tournaments_type = pd.concat([tournaments_type_atp, tournaments_type_wta], ignore_index=True)
+    
+    cin = cin.loc[(cin['odd_home'] > 0) & (cin['odd_away'] > 0)]
 
     #добавляем поля кто выиграл сет
     cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
     cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
     
     #добавляем поле кто выиграл матч, 1 - выиграл первый, 0 - второй
-    cin_st_wl = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration']].groupby(['id_match']).sum()
+    cin_st_wl = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration']].groupby(['id_match'], as_index=False).sum()
     cin_st_wl['result'] = cin_st_wl.apply(lambda x: 1 if x['set_home'] > x['set_away'] else 0, axis = 1)
     
     #добавляем поля покрытие и раунд
@@ -439,14 +447,15 @@ else:
     cin['stage'] = cin.apply(lambda x: get_stage(x['tournament'], x['tournament_link']), axis = 1)
     
     #производим расчет рейтингов эло по всем матчам
+  
     cin_elo = calc_player_elo_all_time(cin, cin_st_wl, tournaments_type)
     
- 
+
 #cin_elo['year'] = cin_elo['date'].apply(lambda x: x.year)
 #atp = pd.read_csv('data/ranks_atp.csv', sep=';', index_col='Unnamed: 0')
 #
 #cin_elo = pd.merge(cin_elo, atp, left_on =  ['id_player_home', 'year'], right_on= ['id_player', 'year'], how = 'left')
-    
+ 
 calc(cin_elo)
 
 cin_elo.to_csv('cin_elo_.csv', sep = ';')
