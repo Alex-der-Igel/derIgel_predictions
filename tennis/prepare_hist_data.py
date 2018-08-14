@@ -161,12 +161,26 @@ def calc_exp_val_simple(scores, n):
     return [exp_val, disp]
 
 
+
 def swap(row, p_id):
     if row['id_player_home'] == p_id:
-        return row['id_player_home'], row['id_player_away'], row['game_home'], row['game_away'], row['elo_home'], row['elo_away']
+        return row
     else:
-        return row['id_player_away'], row['id_player_home'], row['game_away'], row['game_home'], row['elo_away'], row['elo_home']
+        p_h = row['id_player_home']
+        p_a = row['id_player_away']
+        g_h = row['game_home']
+        g_a = row['game_away']
+        e_h = row['elo_home']
+        e_a = row['elo_away']
 
+        row['id_player_home'] = p_a
+        row['id_player_away'] = p_h
+        row['game_home'] = g_a
+        row['game_away'] = g_h
+        row['elo_home'] = e_a
+        row['elo_away'] = e_h
+
+        return row
 
 def calc_player_elo_all_time(cin, cin_st, cin_tour_type):
  
@@ -182,7 +196,7 @@ def calc_player_elo_all_time(cin, cin_st, cin_tour_type):
     matches['elo_surf_away'] = 0
     
     for i in range(0, len(matches)):#len(matches)
-        print(i)
+        printProgressBar(i, len(matches), prefix = 'Progress:', suffix = 'Complete ' + str(i) + ' from ' + str(len(matches)), length = 20)
         #определение индекса строки с предидущим матчем для игрока 1   
         p_h = matches.iloc[i]['id_player_home']
         p_a = matches.iloc[i]['id_player_away']
@@ -341,9 +355,9 @@ def calc(matches):
         p2_l = 0.
         p2_l_d = 0.
         
-        match['id_player_home'], match['id_player_away'], match['game_home'], match['game_away'], match['elo_home'], match['elo_away']  = zip(*match.apply(lambda x: swap(x, p_h), axis = 1))
+        match = match.apply(lambda x: swap(x, p_h), axis = 1)
         
-        p1_str, p1_str_d = calc_exp_val_simple((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values, 8)
+        p1_str, p1_str_d = calc_exp_val_8((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values)
         p1_str_rec, p1_str_rec_d = calc_exp_val_simple((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values, 5)
         p1_freq = (match.iloc[0]['date'] - match.iloc[7]['date']) / np.timedelta64(1, 'D')
         p1_l, p1_l_d  = calc_exp_val_simple((match.loc[match['game_home'] < match['game_away'], 'game_home']-match.loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] < match['game_away']]))
@@ -361,9 +375,9 @@ def calc(matches):
         if(len(match) < 8):
             continue
         
-        match['id_player_home'], match['id_player_away'], match['game_home'], match['game_away'], match['elo_home'], match['elo_away']  = zip(*match.apply(lambda x: swap(x, p_a), axis = 1))
+        match = match.apply(lambda x: swap(x, p_a), axis = 1)
         
-        p2_str, p2_str_d = calc_exp_val_simple((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values, 8)
+        p2_str, p2_str_d = calc_exp_val_8((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values)
         p2_str_rec, p2_str_rec_d = calc_exp_val_simple((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values, 5)
         p2_freq = (match.iloc[0]['date'] - match.iloc[7]['date']) / np.timedelta64(1, 'D')
         p2_l, p2_l_d = calc_exp_val_simple((match.loc[match['game_home'] < match['game_away'], 'game_home']-match.loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] < match['game_away']]))
@@ -432,7 +446,7 @@ else:
     cin_st = pd.concat([cin_st_atp, cin_st_wta], ignore_index=True)
     tournaments_type = pd.concat([tournaments_type_atp, tournaments_type_wta], ignore_index=True)
     
-    cin = cin.loc[(cin['odd_home'] > 0) & (cin['odd_away'] > 0)]
+    cin = cin.loc[(cin['odd_home'] > 0) & (cin['odd_away'] > 0) & (cin['date'] > dateparse('01.01.2018 00:00'))]
 
     #добавляем поля кто выиграл сет
     cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
