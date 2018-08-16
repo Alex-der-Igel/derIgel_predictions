@@ -80,11 +80,13 @@ x_train, x_test, y_train, y_test = train_test_split(cin[['id_match','odd_home', 
 n_est = [800]
 max_d = [8]
 
+predict_columns = ['prob_g', 'elo', 'elo_recent', 'elo_surf', 'str12', 'str12_rec', 'lose12']
+
 for ne in n_est:
     for md in max_d:
         model =  RandomForestRegressor(n_estimators=ne, oob_score=True, random_state=1, max_depth = md, n_jobs = -1)
-        model.fit(x_train[['elo', 'elo_recent', 'elo_surf', 'str12', 'str12_rec', 'lose12', 'prob_g']], y_train)
-        y_pred_rf = model.predict(x_test[['elo', 'elo_recent', 'elo_surf', 'str12', 'str12_rec', 'lose12', 'prob_g']])
+        model.fit(x_train[predict_columns], y_train)
+        y_pred_rf = model.predict(x_test[predict_columns])
         
         
         print ("AUC-ROC (oob) = ", roc_auc_score(y_train, model.oob_prediction_), ' ', ne, ' ', md)
@@ -92,7 +94,7 @@ for ne in n_est:
         
         
         
-feature_importances = pd.DataFrame(model.feature_importances_, index = list(cin[['elo', 'elo_recent', 'elo_surf', 'str12', 'str12_rec', 'lose12', 'prob_g']].columns), columns=['importance']).sort_values('importance', ascending=False)
+feature_importances = pd.DataFrame(model.feature_importances_, index = list(cin[predict_columns].columns), columns=['importance']).sort_values('importance', ascending=False)
 
 print(feature_importances)
       
