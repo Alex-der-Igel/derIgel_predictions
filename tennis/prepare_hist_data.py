@@ -313,7 +313,7 @@ def calc(matches):
     matches.loc[:,'elo_away_lose'] = 0
     matches.loc[:,'fatigue_away'] = 0.
     
-    for i in range(0, len(matches)):#len(matches) 61176
+    for i in range(57417, 57418):#len(matches) 61176
         
         printProgressBar(i, len(matches), prefix = 'Progress:', suffix = 'Complete ' + str(i) + ' from ' + str(len(matches)), length = 20)
         
@@ -358,6 +358,8 @@ def calc(matches):
         match = match.apply(lambda x: swap(x, p_h), axis = 1)
         
         p1_str, p1_str_d = calc_exp_val_8((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values)
+        print(match['id_match'], match['game_home'] - match['game_away'])
+        
         p1_str_rec, p1_str_rec_d = calc_exp_val_simple((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values, 5)
         p1_freq = (match.iloc[0]['date'] - match.iloc[7]['date']) / np.timedelta64(1, 'D')
         p1_l, p1_l_d  = calc_exp_val_simple((match.loc[match['game_home'] < match['game_away'], 'game_home']-match.loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] < match['game_away']]))
@@ -446,8 +448,8 @@ else:
     cin_st = pd.concat([cin_st_atp, cin_st_wta], ignore_index=True)
     tournaments_type = pd.concat([tournaments_type_atp, tournaments_type_wta], ignore_index=True)
     
-    cin = cin.loc[(cin['odd_home'] > 0) & (cin['odd_away'] > 0) & (cin['date'] > dateparse('01.01.2018 00:00'))]
-
+    cin = cin.loc[(cin['odd_home'] > 0) & (cin['odd_away'] > 0) ]
+#& (cin['date'] > dateparse('01.01.2018 00:00'))
     #добавляем поля кто выиграл сет
     cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
     cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
