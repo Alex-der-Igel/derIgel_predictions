@@ -4,7 +4,7 @@ import arc
 from pathlib import Path 
 import numpy as np
 from datetime import datetime
-
+from scipy.stats import gamma
 
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
@@ -106,7 +106,14 @@ def get_stage(trnm, trnm_l):
 
 
 def get_last_matches(cin, p_id, dt, n):
-    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) , ['id_match', 'id_player_home', 'id_player_away', 'date', 'game_home', 'game_away', 'elo_home', 'elo_away']].sort_values(by='date', ascending=False)
+    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) , ['id_match', 'id_player_home', 'id_player_away', 'date', 'game_home', 'game_away', 'elo_home', 'elo_away', 'str_home', 'str_away']].sort_values(by='date', ascending=False)
+    prev = prev[0 : min(n, len(prev))]
+    
+    return prev
+
+
+def get_last_matches_surf(cin, p_id, dt, surf, n):
+    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) & (cin['surf'] == surf) , ['id_match', 'id_player_home', 'id_player_away', 'date', 'game_home', 'game_away', 'elo_home', 'elo_away', 'str_home', 'str_away']].sort_values(by='date', ascending=False)
     prev = prev[0 : min(n, len(prev))]
     
     return prev
@@ -172,13 +179,17 @@ def swap(row, p_id):
         g_a = row['game_away']
         e_h = row['elo_home']
         e_a = row['elo_away']
-
+        st_h = row['str_home']
+        st_a = row['str_away']
+        
         row['id_player_home'] = p_a
         row['id_player_away'] = p_h
         row['game_home'] = g_a
         row['game_away'] = g_h
         row['elo_home'] = e_a
         row['elo_away'] = e_h
+        row['str_home'] = st_a
+        row['str_away'] = st_h        
 
         return row
 
@@ -283,9 +294,44 @@ def elo_time_adj(x):
     else:
         return 1
 
+
+def calc_weghted(matches, elo):
+    
+    sum_w = 0
+    ar_w = []
+    str_w = 0
+    for i in range(0, len(matches)):
+        w = 1 / (1 + 10 ** ((matches.iloc[i]['elo_away'] - elo) / 400))
+        if w > 0.5:
+            w = 1 - w
+        sum_w += w
+        ar_w.append(w)
+        
+    for i in range(0, len(matches)):
+        str_w += arc.arc_n(matches.iloc[i]['game_home'] - matches.iloc[i]['game_away']) * ar_w[i] / sum_w
+    
+    return str_w
+
+def calc_weghted_discount(matches, elo, dt):
+    
+    sum_w = 0
+    ar_w = []
+    str_w = 0
+    for i in range(0, len(matches)):
+        w = 1 / (1 + 10 ** ((matches.iloc[i]['elo_away'] - elo) / 400))
+        if w > 0.5:
+            w = 1 - w
+        sum_w += w * (0.8 ** ((dt - matches.iloc[i]['date']).total_seconds() / 60. / 60. / 24.))
+        ar_w.append(w * (0.8 ** ((dt - matches.iloc[i]['date']).total_seconds() / 60. / 60. / 24.)))
+        
+    for i in range(0, len(matches)):
+        str_w += arc.arc_n(matches.iloc[i]['game_home'] - matches.iloc[i]['game_away']) * ar_w[i] / sum_w
+    
+    return str_w
+
 def calc(matches):
     
-    matches.loc[:, 'str_home'] = 0.
+    matches.loc[:,'str_home'] = 0.
     matches.loc[:,'str_home_d'] = 0.
     matches.loc[:,'str_home_rec'] = 0.
     matches.loc[:,'str_home_rec_d'] = 0.
@@ -298,6 +344,7 @@ def calc(matches):
     matches.loc[:,'elo_home_win'] = 0
     matches.loc[:,'elo_home_lose'] = 0
     matches.loc[:,'fatigue_home'] = 0.
+    matches.loc[:,'str_home_w'] = 0.
     
     matches.loc[:,'str_away'] = 0.
     matches.loc[:,'str_away_d'] = 0.
@@ -312,17 +359,58 @@ def calc(matches):
     matches.loc[:,'elo_away_win'] = 0
     matches.loc[:,'elo_away_lose'] = 0
     matches.loc[:,'fatigue_away'] = 0.
+    matches.loc[:,'str_away_w'] = 0.
     
-    for i in range(57417, 57418):#len(matches) 61176
+    matches.loc[:,'str_home_wd'] = 0.
+    matches.loc[:,'str_away_wd'] = 0.
+    
+    matches.loc[:,'gamma_a_h'] = 0.
+    matches.loc[:,'gamma_loc_h'] = 0.
+    matches.loc[:,'gamma_scale_h'] = 0.
+    
+    matches.loc[:,'gamma_a_h_rec'] = 0.
+    matches.loc[:,'gamma_loc_h_rec'] = 0.
+    matches.loc[:,'gamma_scale_h_rec'] = 0.
+    
+    matches.loc[:,'gamma_a_h_surf'] = 0.
+    matches.loc[:,'gamma_loc_h_surf'] = 0.
+    matches.loc[:,'gamma_scale_h_surf'] = 0.
+    
+    matches.loc[:,'gamma_a_h_rec_surf'] = 0.
+    matches.loc[:,'gamma_loc_h_rec_surf'] = 0.
+    matches.loc[:,'gamma_scale_h_rec_surf'] = 0.
+    
+    matches.loc[:,'gamma_a_a'] = 0.
+    matches.loc[:,'gamma_loc_a'] = 0.
+    matches.loc[:,'gamma_scale_a'] = 0.
+    
+    matches.loc[:,'gamma_a_a_rec'] = 0.
+    matches.loc[:,'gamma_loc_a_rec'] = 0.
+    matches.loc[:,'gamma_scale_a_rec'] = 0.
+    
+    matches.loc[:,'gamma_a_a_surf'] = 0.
+    matches.loc[:,'gamma_loc_a_surf'] = 0.
+    matches.loc[:,'gamma_scale_a_surf'] = 0.
+    
+    matches.loc[:,'gamma_a_a_rec_surf'] = 0.
+    matches.loc[:,'gamma_loc_a_rec_surf'] = 0.
+    matches.loc[:,'gamma_scale_a_rec_surf'] = 0.
+    
+    
+    
+    
+    for i in range(0, len(matches)):#len(matches) 61176
         
         printProgressBar(i, len(matches), prefix = 'Progress:', suffix = 'Complete ' + str(i) + ' from ' + str(len(matches)), length = 20)
-        
+        #print(len(matches))
+        #print(i)
+      
         p_h = matches.iloc[i]['id_player_home']
         p_a = matches.iloc[i]['id_player_away']
         dt  = matches.iloc[i]['date']
-        #m_id = matches.index[i]
+        m_id = matches.index[i]
         
-        match = get_last_matches(matches, p_h, dt, 8)
+        match = get_last_matches(matches, p_h, dt, 20)
         
         if(len(match) < 8):
             continue
@@ -336,6 +424,7 @@ def calc(matches):
         p1_elo_w = 0
         p1_elo_l = 0
         p1_fat = 0.
+        p1_str_w = 0.
         
         p2_str = 0.
         p2_str_d = 0.
@@ -346,6 +435,7 @@ def calc(matches):
         p2_elo_w = 0
         p2_elo_l = 0
         p2_fat = 0.
+        p2_str_w = 0.
         
         p1_w = 0.
         p1_l = 0.
@@ -354,72 +444,218 @@ def calc(matches):
         p2_w = 0.
         p2_l = 0.
         p2_l_d = 0.
+        p1_str_wd = 0.
+        p2_str_wd = 0.
+        
+        a_h = loc_h = scale_h = 0.
+        a_h_rec = loc_h_rec = scale_h_rec = 0.
+        a_h_surf = loc_h_surf = scale_h_surf = 0.
+        a_h_rec_surf = loc_h_rec_surf = scale_h_rec_surf = 0.
+        
+        a_a = loc_a = scale_a = 0.
+        a_a_rec = loc_a_rec = scale_a_rec = 0.
+        a_a_surf = loc_a_surf = scale_a_surf = 0.
+        a_a_rec_surf = loc_a_rec_surf = scale_a_rec_surf = 0.
         
         match = match.apply(lambda x: swap(x, p_h), axis = 1)
         
-        p1_str, p1_str_d = calc_exp_val_8((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values)
-        print(match['id_match'], match['game_home'] - match['game_away'])
-        
+        p1_str, p1_str_d = calc_exp_val_8((match['game_home'] - match['game_away']).iloc[:8].apply(lambda x: arc.arc_n(x)).values)
         p1_str_rec, p1_str_rec_d = calc_exp_val_simple((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values, 5)
         p1_freq = (match.iloc[0]['date'] - match.iloc[7]['date']) / np.timedelta64(1, 'D')
-        p1_l, p1_l_d  = calc_exp_val_simple((match.loc[match['game_home'] < match['game_away'], 'game_home']-match.loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] < match['game_away']]))
-        p1_w, p1_w_d  = calc_exp_val_simple((match.loc[match['game_home'] > match['game_away'], 'game_home']-match.loc[match['game_home'] > match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] > match['game_away']]))
+        p1_l, p1_l_d  = calc_exp_val_simple((match.iloc[:8].loc[match['game_home'] < match['game_away'], 'game_home']-match.iloc[:8].loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.iloc[:8].loc[match['game_home'] < match['game_away']]))
+        p1_w, p1_w_d  = calc_exp_val_simple((match.iloc[:8].loc[match['game_home'] > match['game_away'], 'game_home']-match.iloc[:8].loc[match['game_home'] > match['game_away'], 'game_away']).values, len(match.iloc[:8].loc[match['game_home'] > match['game_away']]))
         p1_elo_pl = calc_exp_val_simple(match['elo_away'].values, 8)[0]
-        p1_elo_w = calc_exp_val_simple(match.loc[match['game_home'] > match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] > match['game_away']]))[0]
-        p1_elo_l = calc_exp_val_simple(match.loc[match['game_home'] < match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] < match['game_away']]))[0]
-        p1_fat = (match.iloc[0]['game_home'] + match.iloc[0]['game_away']) * (0.7 ** ((dt - match.iloc[0]['date']).total_seconds() / 60 / 60 / 24)) + \
-                 (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60 / 60 / 24)) + \
-                 (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60 / 60 / 24)) + \
-                 (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60 / 60 / 24))
+        p1_elo_w = calc_exp_val_simple(match.iloc[:8].loc[match['game_home'] > match['game_away'], 'elo_away'].values, len(match.iloc[:8].loc[match['game_home'] > match['game_away']]))[0]
+        p1_elo_l = calc_exp_val_simple(match.iloc[:8].loc[match['game_home'] < match['game_away'], 'elo_away'].values, len(match.iloc[:8].loc[match['game_home'] < match['game_away']]))[0]
+        p1_fat = (match.iloc[0]['game_home'] + match.iloc[0]['game_away']) * (0.7 ** ((dt - match.iloc[0]['date']).total_seconds() / 60. / 60. / 24.)) + \
+                 (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60. / 60. / 24.)) + \
+                 (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60. / 60. / 24.)) + \
+                 (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60. / 60. / 24.))
+        p1_str_w = calc_weghted(match, matches.iloc[i]['elo_away'])
+        p1_str_wd = calc_weghted_discount(match, matches.iloc[i]['elo_away'], matches.iloc[i]['date'])
         
-        match = get_last_matches(matches, p_a, dt, 8)
+        #calculate gamma distribution for last 20 matches
+        #calculate number of match to build ditribution
+        gamma_len = len(match.loc[(match['str_home'] > 0.)])
+        gamma_str = []
+              
+        
+        if(gamma_len >= 8):
+            #if enough to calculate distribution
+            elo = matches.iloc[i]['elo_away']
+            for gamma_cnt in range(0, min(20, gamma_len)):
+                matches_for_gamma = get_last_matches(matches, p_h, match.iloc[gamma_cnt]['date'], 20)
+                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+                
+            a_h, loc_h, scale_h = gamma.fit(gamma_str)
+            a_h_rec, loc_h_rec, scale_h_rec = gamma.fit(gamma_str[:8])
+        
+        
+        #get last matches by surface
+        match = get_last_matches_surf(matches, p_h, dt, matches.iloc[i]['surf'], 20)
+        
+        match = match.apply(lambda x: swap(x, p_h), axis = 1)        
+        gamma_len = len(match.loc[match['str_home'] > 0.])
+        gamma_str = []
+        
+        if(gamma_len >= 8):
+            #if enough to calculate distribution
+            elo = matches.iloc[i]['elo_away']
+            for gamma_cnt in range(0, min(20, gamma_len)):
+                matches_for_gamma = get_last_matches_surf(matches, p_h, match.iloc[gamma_cnt]['date'], matches.iloc[i]['surf'], 20)
+                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+        
+            a_h_surf, loc_h_surf, scale_h_surf = gamma.fit(gamma_str)
+            a_h_rec_surf, loc_h_rec_surf, scale_h_rec_surf = gamma.fit(gamma_str[:8])
+            
+        matches.at[m_id, 'str_home'] = p1_str
+        matches.at[m_id, 'str_home_d'] = p1_str_d
+        matches.at[m_id, 'str_home_rec'] = p1_str_rec
+        matches.at[m_id, 'str_home_rec_d'] = p1_str_rec_d
+        matches.at[m_id, 'l_home'] = p1_l
+        matches.at[m_id, 'l_home_d'] = p1_l_d
+        matches.at[m_id, 'w_home'] = p1_w
+        matches.at[m_id, 'w_home_d'] = p1_w_d
+        matches.at[m_id, 'freq_home'] = p1_freq
+        matches.at[m_id, 'elo_home_played'] = p1_elo_pl
+        matches.at[m_id, 'elo_home_win'] = p1_elo_w
+        matches.at[m_id, 'elo_home_lose'] = p1_elo_l
+        matches.at[m_id, 'fatigue_home'] = p1_fat    
+        
+        matches.at[m_id, 'str_home_w'] = p1_str_w  
+        matches.at[m_id, 'str_home_wd'] = p1_str_wd
+        
+        matches.at[m_id, 'gamma_a_h'] = a_h
+        matches.at[m_id, 'gamma_loc_h'] = loc_h
+        matches.at[m_id, 'gamma_scale_h'] = scale_h
+        
+        matches.at[m_id, 'gamma_a_h_rec'] = a_h_rec
+        matches.at[m_id, 'gamma_loc_h_rec'] = loc_h_rec
+        matches.at[m_id, 'gamma_scale_h_rec'] = scale_h_rec
+        
+        matches.at[m_id, 'gamma_a_h_surf'] = a_h_surf
+        matches.at[m_id, 'gamma_loc_h_surf'] = loc_h_surf
+        matches.at[m_id, 'gamma_scale_h_surf'] = scale_h_surf
+        
+        matches.at[m_id, 'gamma_a_h_rec_surf'] = a_h_rec_surf
+        matches.at[m_id, 'gamma_loc_h_rec_surf'] = loc_h_rec_surf
+        matches.at[m_id, 'gamma_scale_h_rec_surf'] = scale_h_rec_surf
+        
+        
+          
+        match = get_last_matches(matches, p_a, dt, 20)
         
         if(len(match) < 8):
             continue
         
         match = match.apply(lambda x: swap(x, p_a), axis = 1)
         
-        p2_str, p2_str_d = calc_exp_val_8((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values)
+        p2_str, p2_str_d = calc_exp_val_8((match['game_home'] - match['game_away']).iloc[:8].apply(lambda x: arc.arc_n(x)).values)
         p2_str_rec, p2_str_rec_d = calc_exp_val_simple((match['game_home'] - match['game_away']).apply(lambda x: arc.arc_n(x)).values, 5)
         p2_freq = (match.iloc[0]['date'] - match.iloc[7]['date']) / np.timedelta64(1, 'D')
-        p2_l, p2_l_d = calc_exp_val_simple((match.loc[match['game_home'] < match['game_away'], 'game_home']-match.loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] < match['game_away']]))
-        p2_w, p2_w_d  = calc_exp_val_simple((match.loc[match['game_home'] > match['game_away'], 'game_home']-match.loc[match['game_home'] > match['game_away'], 'game_away']).values, len(match.loc[match['game_home'] > match['game_away']]))
+        p2_l, p2_l_d = calc_exp_val_simple((match.iloc[:8].loc[match['game_home'] < match['game_away'], 'game_home']-match.iloc[:8].loc[match['game_home'] < match['game_away'], 'game_away']).values, len(match.iloc[:8].loc[match['game_home'] < match['game_away']]))
+        p2_w, p2_w_d = calc_exp_val_simple((match.iloc[:8].loc[match['game_home'] > match['game_away'], 'game_home']-match.iloc[:8].loc[match['game_home'] > match['game_away'], 'game_away']).values, len(match.iloc[:8].loc[match['game_home'] > match['game_away']]))
         p2_elo_pl = calc_exp_val_simple(match['elo_away'].values, 8)[0]
-        p2_elo_w = calc_exp_val_simple(match.loc[match['game_home'] > match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] > match['game_away']]))[0]
-        p2_elo_l = calc_exp_val_simple(match.loc[match['game_home'] < match['game_away'], 'elo_away'].values, len(match.loc[match['game_home'] < match['game_away']]))[0]
-        p2_fat = (match.iloc[0]['game_home'] + match.iloc[0]['game_away']) * (0.7 ** ((dt - match.iloc[0]['date']).total_seconds() / 60 / 60 / 24)) + \
-                 (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60 / 60 / 24)) + \
-                 (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60 / 60 / 24)) + \
-                 (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60 / 60 / 24))
-        
-        matches.at[i, 'str_home'] = p1_str
-        matches.at[i, 'str_home_d'] = p1_str_d
-        matches.at[i, 'str_home_rec'] = p1_str_rec
-        matches.at[i, 'str_home_rec_d'] = p1_str_rec_d
-        matches.at[i, 'l_home'] = p1_l
-        matches.at[i, 'l_home_d'] = p1_l_d
-        matches.at[i, 'w_home'] = p1_w
-        matches.at[i, 'w_home_d'] = p1_w_d
-        matches.at[i, 'freq_home'] = p1_freq
-        matches.at[i, 'elo_home_played'] = p1_elo_pl
-        matches.at[i, 'elo_home_win'] = p1_elo_w
-        matches.at[i, 'elo_home_lose'] = p1_elo_l
-        matches.at[i,'fatigue_home'] = p1_fat        
-        
-        matches.at[i, 'str_away'] = p2_str
-        matches.at[i, 'str_away_d'] = p2_str_d
-        matches.at[i, 'str_away_rec'] = p2_str_rec
-        matches.at[i, 'str_away_rec_d'] = p2_str_rec_d
-        matches.at[i, 'l_away'] = p2_l
-        matches.at[i, 'l_away_d'] = p2_l_d
-        matches.at[i, 'w_away'] = p2_w
-        matches.at[i, 'w_away_d'] = p2_w_d
-        matches.at[i, 'freq_away'] = p2_freq
-        matches.at[i, 'elo_away_played'] = p2_elo_pl
-        matches.at[i, 'elo_away_win'] = p2_elo_w
-        matches.at[i, 'elo_away_lose'] = p2_elo_l
-        matches.at[i,'fatigue_away'] = p2_fat
+        p2_elo_w = calc_exp_val_simple(match.iloc[:8].loc[match['game_home'] > match['game_away'], 'elo_away'].values, len(match.iloc[:8].loc[match['game_home'] > match['game_away']]))[0]
+        p2_elo_l = calc_exp_val_simple(match.iloc[:8].loc[match['game_home'] < match['game_away'], 'elo_away'].values, len(match.iloc[:8].loc[match['game_home'] < match['game_away']]))[0]
+        p2_fat = (match.iloc[0]['game_home'] + match.iloc[0]['game_away']) * (0.7 ** ((dt - match.iloc[0]['date']).total_seconds() / 60. / 60. / 24.)) + \
+                 (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60. / 60. / 24.)) + \
+                 (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60. / 60. / 24.)) + \
+                 (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60. / 60. / 24.))
+        p2_str_w = calc_weghted(match, matches.iloc[i]['elo_away'])
+        p2_str_wd = calc_weghted_discount(match, matches.iloc[i]['elo_away'], matches.iloc[i]['date'])
 
+  
+        #calculate gamma distribution for last 20 matches
+        #calculate number of match to build ditribution
+        gamma_len = len(match.loc[match['str_home'] > 0.])
+        gamma_str = []
+        
+        if(gamma_len >= 8):
+            #if enough to calculate distribution
+            elo = matches.iloc[i]['elo_home']
+            for gamma_cnt in range(0, min(20, gamma_len)):
+                matches_for_gamma = get_last_matches(matches, p_a, match.iloc[gamma_cnt]['date'], 20)
+                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_a), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+        
+            a_a, loc_a, scale_a = gamma.fit(gamma_str)
+            a_a_rec, loc_a_rec, scale_a_rec = gamma.fit(gamma_str[:8])
+        
+        
+        #get last matches by surface
+        match = get_last_matches_surf(matches, p_a, dt, matches.iloc[i]['surf'], 20)
+        
+        match = match.apply(lambda x: swap(x, p_a), axis = 1)        
+        gamma_len = len(match.loc[match['str_home'] > 0.])
+        gamma_str = []
+        
+        if(gamma_len >= 8):
+            #if enough to calculate distribution
+            elo = matches.iloc[i]['elo_home']
+            for gamma_cnt in range(0, min(20, gamma_len)):
+                matches_for_gamma = get_last_matches_surf(matches, p_a, match.iloc[gamma_cnt]['date'], matches.iloc[i]['surf'], 20)
+                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_a), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+        
+            a_a_surf, loc_a_surf, scale_a_surf = gamma.fit(gamma_str)
+            a_a_rec_surf, loc_a_rec_surf, scale_a_rec_surf = gamma.fit(gamma_str[:8])
+          
+
+        matches.at[m_id, 'str_home_w'] = p1_str_w  
+        matches.at[m_id, 'str_home_wd'] = p1_str_wd
+        
+        matches.at[m_id, 'gamma_a_h'] = a_h
+        matches.at[m_id, 'gamma_loc_h'] = loc_h
+        matches.at[m_id, 'gamma_scale_h'] = scale_h
+        
+        matches.at[m_id, 'gamma_a_h_rec'] = a_h_rec
+        matches.at[m_id, 'gamma_loc_h_rec'] = loc_h_rec
+        matches.at[m_id, 'gamma_scale_h_rec'] = scale_h_rec
+        
+        matches.at[m_id, 'gamma_a_h_surf'] = a_h_surf
+        matches.at[m_id, 'gamma_loc_h_surf'] = loc_h_surf
+        matches.at[m_id, 'gamma_scale_h_surf'] = scale_h_surf
+        
+        matches.at[m_id, 'gamma_a_h_rec_surf'] = a_h_rec_surf
+        matches.at[m_id, 'gamma_loc_h_rec_surf'] = loc_h_rec_surf
+        matches.at[m_id, 'gamma_scale_h_rec_surf'] = scale_h_rec_surf
+        
+        matches.at[m_id, 'str_away'] = p2_str
+        matches.at[m_id, 'str_away_d'] = p2_str_d
+        matches.at[m_id, 'str_away_rec'] = p2_str_rec
+        matches.at[m_id, 'str_away_rec_d'] = p2_str_rec_d
+        matches.at[m_id, 'l_away'] = p2_l
+        matches.at[m_id, 'l_away_d'] = p2_l_d
+        matches.at[m_id, 'w_away'] = p2_w
+        matches.at[m_id, 'w_away_d'] = p2_w_d
+        matches.at[m_id, 'freq_away'] = p2_freq
+        matches.at[m_id, 'elo_away_played'] = p2_elo_pl
+        matches.at[m_id, 'elo_away_win'] = p2_elo_w
+        matches.at[m_id, 'elo_away_lose'] = p2_elo_l
+        matches.at[m_id, 'fatigue_away'] = p2_fat        
+        
+        matches.at[m_id, 'str_away_w'] = p2_str_w
+        matches.at[m_id, 'str_away_wd'] = p2_str_wd
+        
+        matches.at[m_id, 'gamma_a_a'] = a_a
+        matches.at[m_id, 'gamma_loc_a'] = loc_a
+        matches.at[m_id, 'gamma_scale_a'] = scale_a
+        
+        matches.at[m_id, 'gamma_a_a_rec'] = a_a_rec
+        matches.at[m_id, 'gamma_loc_a_rec'] = loc_a_rec
+        matches.at[m_id, 'gamma_scale_a_rec'] = scale_a_rec
+        
+        matches.at[m_id, 'gamma_a_a_surf'] = a_a_surf
+        matches.at[m_id, 'gamma_loc_a_surf'] = loc_a_surf
+        matches.at[m_id, 'gamma_scale_a_surf'] = scale_a_surf
+        
+        matches.at[m_id, 'gamma_a_a_rec_surf'] = a_a_rec_surf
+        matches.at[m_id, 'gamma_loc_a_rec_surf'] = loc_a_rec_surf
+        matches.at[m_id, 'gamma_scale_a_rec_surf'] = scale_a_rec_surf
+        
     return 0
 
 
@@ -448,7 +684,7 @@ else:
     cin_st = pd.concat([cin_st_atp, cin_st_wta], ignore_index=True)
     tournaments_type = pd.concat([tournaments_type_atp, tournaments_type_wta], ignore_index=True)
     
-    cin = cin.loc[(cin['odd_home'] > 0) & (cin['odd_away'] > 0) ]
+    cin = cin.loc[(cin['odd_home'] > 0) & (cin['odd_away'] > 0) ]#& (cin['date'] > dateparse('01.01.2018 00:00'))
 #& (cin['date'] > dateparse('01.01.2018 00:00'))
     #добавляем поля кто выиграл сет
     cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
@@ -472,8 +708,12 @@ else:
 #
 #cin_elo = pd.merge(cin_elo, atp, left_on =  ['id_player_home', 'year'], right_on= ['id_player', 'year'], how = 'left')
  
+#cin_elo = cin_elo.loc[(cin_elo['date'] > dateparse('01.01.2018 00:00'))]    
+
+cin_elo = cin_elo.loc[(cin_elo['game_home'].notnull()) & (cin_elo['date'] > dateparse('01.01.2018 00:00'))]    
+
 calc(cin_elo)
 
-cin_elo.to_csv('cin_elo_.csv', sep = ';')
+cin_elo.to_csv('cin_elo_.csv', sep = ';', decimal=",")
 
 
