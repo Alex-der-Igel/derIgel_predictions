@@ -106,14 +106,14 @@ def get_stage(trnm, trnm_l):
 
 
 def get_last_matches(cin, p_id, dt, n):
-    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) , ['id_match', 'id_player_home', 'id_player_away', 'date', 'game_home', 'game_away', 'elo_home', 'elo_away', 'str_home', 'str_away']].sort_values(by='date', ascending=False)
+    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) , ['id_match', 'id_player_home', 'id_player_away', 'date', 'game_home', 'game_away', 'elo_home', 'elo_away', 'str_home', 'str_away', 'surf']].sort_values(by='date', ascending=False)
     prev = prev[0 : min(n, len(prev))]
     
     return prev
 
 
 def get_last_matches_surf(cin, p_id, dt, surf, n):
-    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) & (cin['surf'] == surf) , ['id_match', 'id_player_home', 'id_player_away', 'date', 'game_home', 'game_away', 'elo_home', 'elo_away', 'str_home', 'str_away']].sort_values(by='date', ascending=False)
+    prev = cin.loc[((cin['id_player_home'] == p_id) | (cin['id_player_away'] == p_id)) & (cin['date'] < dt) & (cin['surf'] == surf) , ['id_match', 'id_player_home', 'id_player_away', 'date', 'game_home', 'game_away', 'elo_home', 'elo_away', 'str_home', 'str_away', 'surf']].sort_values(by='date', ascending=False)
     prev = prev[0 : min(n, len(prev))]
     
     return prev
@@ -295,36 +295,36 @@ def elo_time_adj(x):
         return 1
 
 
-def calc_weghted(matches, elo):
+def calc_weghted(matches, elo, n = 20):
     
     sum_w = 0
     ar_w = []
     str_w = 0
-    for i in range(0, len(matches)):
+    for i in range(0, min(len(matches), n)):
         w = 1 / (1 + 10 ** ((matches.iloc[i]['elo_away'] - elo) / 400))
         if w > 0.5:
             w = 1 - w
         sum_w += w
         ar_w.append(w)
         
-    for i in range(0, len(matches)):
+    for i in range(0, min(len(matches), n)):
         str_w += arc.arc_n(matches.iloc[i]['game_home'] - matches.iloc[i]['game_away']) * ar_w[i] / sum_w
     
     return str_w
 
-def calc_weghted_discount(matches, elo, dt):
+def calc_weghted_discount(matches, elo, dt, n = 20):
     
     sum_w = 0
     ar_w = []
     str_w = 0
-    for i in range(0, len(matches)):
+    for i in range(0, min(len(matches), 20)):
         w = 1 / (1 + 10 ** ((matches.iloc[i]['elo_away'] - elo) / 400))
         if w > 0.5:
             w = 1 - w
         sum_w += w * (0.8 ** ((dt - matches.iloc[i]['date']).total_seconds() / 60. / 60. / 24.))
         ar_w.append(w * (0.8 ** ((dt - matches.iloc[i]['date']).total_seconds() / 60. / 60. / 24.)))
         
-    for i in range(0, len(matches)):
+    for i in range(0, min(len(matches), n)):
         str_w += arc.arc_n(matches.iloc[i]['game_home'] - matches.iloc[i]['game_away']) * ar_w[i] / sum_w
     
     return str_w
@@ -410,7 +410,7 @@ def calc(matches):
         dt  = matches.iloc[i]['date']
         m_id = matches.index[i]
         
-        match = get_last_matches(matches, p_h, dt, 20)
+        match = get_last_matches(matches, p_h, dt, 40)
         
         if(len(match) < 8):
             continue
@@ -471,8 +471,8 @@ def calc(matches):
                  (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60. / 60. / 24.)) + \
                  (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60. / 60. / 24.)) + \
                  (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60. / 60. / 24.))
-        p1_str_w = calc_weghted(match, matches.iloc[i]['elo_away'])
-        p1_str_wd = calc_weghted_discount(match, matches.iloc[i]['elo_away'], matches.iloc[i]['date'])
+        p1_str_w = calc_weghted(match, matches.iloc[i]['elo_away'], n = 20)
+        p1_str_wd = calc_weghted_discount(match, matches.iloc[i]['elo_away'], matches.iloc[i]['date'], n = 20)
         
         #calculate gamma distribution for last 20 matches
         #calculate number of match to build ditribution
@@ -484,16 +484,16 @@ def calc(matches):
             #if enough to calculate distribution
             elo = matches.iloc[i]['elo_away']
             for gamma_cnt in range(0, min(20, gamma_len)):
-                matches_for_gamma = get_last_matches(matches, p_h, match.iloc[gamma_cnt]['date'], 20)
-                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
-                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+                matches_for_gamma = get_last_matches(match, p_h, match.iloc[gamma_cnt]['date'], 20)
+                #matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo, n = 8))
                 
             a_h, loc_h, scale_h = gamma.fit(gamma_str)
             a_h_rec, loc_h_rec, scale_h_rec = gamma.fit(gamma_str[:8])
         
         
         #get last matches by surface
-        match = get_last_matches_surf(matches, p_h, dt, matches.iloc[i]['surf'], 20)
+        match = get_last_matches_surf(matches, p_h, dt, matches.iloc[i]['surf'], 40)
         
         match = match.apply(lambda x: swap(x, p_h), axis = 1)        
         gamma_len = len(match.loc[match['str_home'] > 0.])
@@ -503,9 +503,9 @@ def calc(matches):
             #if enough to calculate distribution
             elo = matches.iloc[i]['elo_away']
             for gamma_cnt in range(0, min(20, gamma_len)):
-                matches_for_gamma = get_last_matches_surf(matches, p_h, match.iloc[gamma_cnt]['date'], matches.iloc[i]['surf'], 20)
-                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
-                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+                matches_for_gamma = get_last_matches_surf(match, p_h, match.iloc[gamma_cnt]['date'], matches.iloc[i]['surf'], 20)
+                #matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo, n = 8))
         
             a_h_surf, loc_h_surf, scale_h_surf = gamma.fit(gamma_str)
             a_h_rec_surf, loc_h_rec_surf, scale_h_rec_surf = gamma.fit(gamma_str[:8])
@@ -545,7 +545,7 @@ def calc(matches):
         
         
           
-        match = get_last_matches(matches, p_a, dt, 20)
+        match = get_last_matches(matches, p_a, dt, 40)
         
         if(len(match) < 8):
             continue
@@ -564,8 +564,8 @@ def calc(matches):
                  (match.iloc[1]['game_home'] + match.iloc[1]['game_away']) * (0.7 ** ((dt - match.iloc[1]['date']).total_seconds() / 60. / 60. / 24.)) + \
                  (match.iloc[2]['game_home'] + match.iloc[2]['game_away']) * (0.7 ** ((dt - match.iloc[2]['date']).total_seconds() / 60. / 60. / 24.)) + \
                  (match.iloc[3]['game_home'] + match.iloc[3]['game_away']) * (0.7 ** ((dt - match.iloc[3]['date']).total_seconds() / 60. / 60. / 24.))
-        p2_str_w = calc_weghted(match, matches.iloc[i]['elo_away'])
-        p2_str_wd = calc_weghted_discount(match, matches.iloc[i]['elo_away'], matches.iloc[i]['date'])
+        p2_str_w = calc_weghted(match, matches.iloc[i]['elo_away'], n = 20)
+        p2_str_wd = calc_weghted_discount(match, matches.iloc[i]['elo_away'], matches.iloc[i]['date'], n = 20)
 
   
         #calculate gamma distribution for last 20 matches
@@ -577,16 +577,16 @@ def calc(matches):
             #if enough to calculate distribution
             elo = matches.iloc[i]['elo_home']
             for gamma_cnt in range(0, min(20, gamma_len)):
-                matches_for_gamma = get_last_matches(matches, p_a, match.iloc[gamma_cnt]['date'], 20)
-                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_a), axis = 1)
-                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+                matches_for_gamma = get_last_matches(match, p_a, match.iloc[gamma_cnt]['date'], 20)
+                #matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_a), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo, n = 8))
         
             a_a, loc_a, scale_a = gamma.fit(gamma_str)
             a_a_rec, loc_a_rec, scale_a_rec = gamma.fit(gamma_str[:8])
         
         
         #get last matches by surface
-        match = get_last_matches_surf(matches, p_a, dt, matches.iloc[i]['surf'], 20)
+        match = get_last_matches_surf(matches, p_a, dt, matches.iloc[i]['surf'], 40)
         
         match = match.apply(lambda x: swap(x, p_a), axis = 1)        
         gamma_len = len(match.loc[match['str_home'] > 0.])
@@ -596,9 +596,9 @@ def calc(matches):
             #if enough to calculate distribution
             elo = matches.iloc[i]['elo_home']
             for gamma_cnt in range(0, min(20, gamma_len)):
-                matches_for_gamma = get_last_matches_surf(matches, p_a, match.iloc[gamma_cnt]['date'], matches.iloc[i]['surf'], 20)
-                matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_a), axis = 1)
-                gamma_str.append(calc_weghted(matches_for_gamma, elo))
+                matches_for_gamma = get_last_matches_surf(match, p_a, match.iloc[gamma_cnt]['date'], matches.iloc[i]['surf'], 20)
+                #matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_a), axis = 1)
+                gamma_str.append(calc_weghted(matches_for_gamma, elo, n = 8))
         
             a_a_surf, loc_a_surf, scale_a_surf = gamma.fit(gamma_str)
             a_a_rec_surf, loc_a_rec_surf, scale_a_rec_surf = gamma.fit(gamma_str[:8])
@@ -710,7 +710,9 @@ else:
  
 #cin_elo = cin_elo.loc[(cin_elo['date'] > dateparse('01.01.2018 00:00'))]    
 
-cin_elo = cin_elo.loc[(cin_elo['game_home'].notnull()) & (cin_elo['date'] > dateparse('01.01.2018 00:00'))]    
+#cin_elo = cin_elo.loc[(cin_elo['game_home'].notnull()) & (cin_elo['date'] > dateparse('01.01.2018 00:00'))]    
+
+cin_elo = cin_elo.loc[(cin_elo['game_home'].notnull())]    
 
 calc(cin_elo)
 
