@@ -166,7 +166,10 @@ def calc_weghted_discount(matches, elo, dt, n = 20):
     return str_w
 
 
-if Path('data/matches_elo.csv').exists():
+
+if Path('data/cin_elo_.csv').exists():
+    cin_elo = pd.read_csv('data/cin_elo_.csv', sep=';', parse_dates=['date'], date_parser=dateparse_sec, index_col = 0, decimal=",")
+elif Path('data/matches_elo.csv').exists():
     cin_elo = pd.read_csv('data/matches_elo.csv', sep=';', parse_dates=['date'], date_parser=dateparse_sec, index_col = 0)
 else:
     #читаем входные файлы
@@ -215,31 +218,33 @@ else:
  
 #cin_elo = cin_elo.loc[(cin_elo['game_home'].notnull()) & (cin_elo['date'] > dateparse('01.06.2018 00:00'))]
 
-cin_st_atp = pd.read_csv('data/match_stats_atp.csv', sep=';', index_col = 0)
-cin_st_wta = pd.read_csv('data/match_stats_wta.csv', sep=';', index_col = 0)
-cin_st = pd.concat([cin_st_atp, cin_st_wta], ignore_index=True)
-cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
-cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
-
-cin_st['set_home_arc'] = cin_st.apply(lambda x: arc.arc_n(x['game_home'] - x['game_away']), axis = 1)
-cin_st['set_away_arc'] = cin_st.apply(lambda x: arc.arc_n(x['game_away'] - x['game_home']), axis = 1)
-
-cin_st_wl = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration', 'set_home_arc', 'set_away_arc']].groupby(['id_match'], as_index=False).sum()
-
-cin_st_wl['set_home_arc'] = cin_st_wl['set_home_arc'] / (cin_st_wl['set_home'] + cin_st_wl['set_away'])
-cin_st_wl['set_away_arc'] = cin_st_wl['set_away_arc'] / (cin_st_wl['set_home'] + cin_st_wl['set_away'])
-
-cin_st_wl['set_home_arc_s'] = cin_st_wl.apply(lambda x: arc.arc_f(x['set_home'] , x['set_away']), axis = 1)
-cin_st_wl['set_away_arc_s'] = cin_st_wl.apply(lambda x: arc.arc_f(x['set_away'] , x['set_home']), axis = 1)
-
-cin_elo = pd.merge(cin_elo, cin_st_wl[['id_match', 'set_home_arc', 'set_away_arc', 'set_home_arc_s', 'set_away_arc_s']], left_on=  ['id_match'], right_on= ['id_match'], how = 'left').sort_values('date', ascending=True)
+if 'set_home_arc_s' not in cin_elo.columns or 'set_away_arc_s' not in cin_elo.columns:
+    
+    cin_st_atp = pd.read_csv('data/match_stats_atp.csv', sep=';', index_col = 0)
+    cin_st_wta = pd.read_csv('data/match_stats_wta.csv', sep=';', index_col = 0)
+    cin_st = pd.concat([cin_st_atp, cin_st_wta], ignore_index=True)
+    cin_st['set_home'] = cin_st.apply(lambda x: 1 if x['game_home'] > x['game_away'] else 0, axis = 1)
+    cin_st['set_away'] = cin_st.apply(lambda x: 0 if x['game_home'] > x['game_away'] else 1, axis = 1)
+    
+    cin_st['set_home_arc'] = cin_st.apply(lambda x: arc.arc_n(x['game_home'] - x['game_away']), axis = 1)
+    cin_st['set_away_arc'] = cin_st.apply(lambda x: arc.arc_n(x['game_away'] - x['game_home']), axis = 1)
+    
+    cin_st_wl = cin_st[['id_match', 'game_home','game_away', 'set_home', 'set_away', 'set_duration', 'set_home_arc', 'set_away_arc']].groupby(['id_match'], as_index=False).sum()
+    
+    cin_st_wl['set_home_arc'] = cin_st_wl['set_home_arc'] / (cin_st_wl['set_home'] + cin_st_wl['set_away'])
+    cin_st_wl['set_away_arc'] = cin_st_wl['set_away_arc'] / (cin_st_wl['set_home'] + cin_st_wl['set_away'])
+    
+    cin_st_wl['set_home_arc_s'] = cin_st_wl.apply(lambda x: arc.arc_f(x['set_home'] , x['set_away']), axis = 1)
+    cin_st_wl['set_away_arc_s'] = cin_st_wl.apply(lambda x: arc.arc_f(x['set_away'] , x['set_home']), axis = 1)
+    
+    cin_elo = pd.merge(cin_elo, cin_st_wl[['id_match', 'set_home_arc', 'set_away_arc', 'set_home_arc_s', 'set_away_arc_s']], left_on=  ['id_match'], right_on= ['id_match'], how = 'left').sort_values('date', ascending=True)
 
 cin_elo = cin_elo.loc[(cin_elo['game_home'].notnull())]
 
-upd_list = cin_elo.loc[(cin_elo['game_home'].notnull()) & (cin_elo['date'] > dateparse('01.01.2018 00:00'))].index.tolist()    
+upd_list = cin_elo.loc[(cin_elo['str_home'] == 0) & (cin_elo['game_home'].notnull()) & (cin_elo['date'] > dateparse('01.01.2014 00:00'))].index.tolist()    
 
-cin_elo = calc(cin_elo, cin_elo, upd_list)
+cin_elo = calc(cin_elo, cin_elo, upd_list)[0]
 
-cin_elo.to_csv('cin_elo_.csv', sep = ';', decimal=",")
+cin_elo.to_csv('data/cin_elo_.csv', sep = ';', decimal=",")
 
 

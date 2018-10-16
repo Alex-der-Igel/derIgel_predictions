@@ -27,7 +27,8 @@ def get_last_matches():
     matches_finished = []
     matches_forecast = []
     
-    for dt in ['-6', '-5', '-4', '-3', '-2', '-1', '0', '1']:#'-5', '-4', '-3', '-2', '-1',
+    #for dt in ['-6', '-5', '-4', '-3', '-2', '-1', '0', '1']:#'-5', '-4', '-3', '-2', '-1',
+    for dt in ['-2', '-1', '0', '1']:
             driver.execute_script('set_calendar_date(' + dt + ');')
             WebDriverWait(driver, 40).until(EC.invisibility_of_element_located((By.ID, "preload")))
     
@@ -74,6 +75,7 @@ def load_match_info(table):
         
             m_l = tab
             try_load = 0
+            #print(m_l)
             while True:
                 try:
                     try_load += 1
@@ -143,8 +145,8 @@ def load_match_info(table):
                     if len(tm.text) > 0 and len(tm.text) < 5:
                         dur.append(int(tm.text[0: 1]) * 60 + int(tm.text[2: 4]))
             
-            tour = soup.find('th', {'class': 'header'}).find('a').text
-            tour_link = soup.find('th', {'class': 'header'}).find('a').get('onclick')
+            tour = soup.find('div', {'class': 'header'}).find('a').text
+            tour_link = soup.find('div', {'class': 'header'}).find('a').get('onclick')
             tour_link = tour_link[tour_link.find('/'): tour_link.find(')') - 1]
                    
             pl_home = soup.find('div', {'class': 'team-text tname-home'}).find('a').get('onclick')
@@ -225,10 +227,10 @@ def load_match_info_future(table):
             else:
                 match_note = None
                     
-            m_t = soup.find('div', {'class': 'mstat-date'}).text
+            m_t = pd.datetime.strptime(soup.find('div', {'class': 'mstat-date'}).text, '%d.%m.%Y %H:%M')
              
-            tour = soup.find('th', {'class': 'header'}).find('a').text
-            tour_link = soup.find('th', {'class': 'header'}).find('a').get('onclick')
+            tour = soup.find('div', {'class': 'header'}).find('a').text
+            tour_link = soup.find('div', {'class': 'header'}).find('a').get('onclick')
             tour_link = tour_link[tour_link.find('/'): tour_link.find(')') - 1]
                    
             pl_home = soup.find('div', {'class': 'team-text tname-home'}).find('a').get('onclick')

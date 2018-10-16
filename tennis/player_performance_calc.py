@@ -1,6 +1,7 @@
-import math, datetime
-import arc
+import math
+from datetime import datetime
 from arc import printProgressBar
+import arc
 import numpy as np
 from scipy.stats import gamma
 
@@ -140,7 +141,7 @@ def calc_exp_val_8(scores):
     disp = 0
     
     if len(scores) != 8:
-        return -1
+        return [0.5, 0]
     
     for i in range(0, len(scores)):
         if  i < 2:
@@ -169,7 +170,7 @@ def calc_exp_val_8(scores):
     return [exp_val, disp]
 
 def calc_exp_val_simple(scores, n):
-    exp_val = 0
+    exp_val = 0.5
     disp = 0
     if n == 0:
         return [exp_val, disp]
@@ -215,7 +216,7 @@ def swap(row, p_id):
     
 def calc_stats(matches, match, p_id, dt, elo, surf):
     
-    player_stats = np.zeros(32)
+    player_stats = np.zeros(44)
     
     match = match.apply(lambda x: swap(x, p_id), axis = 1)
         
@@ -238,21 +239,28 @@ def calc_stats(matches, match, p_id, dt, elo, surf):
     #calculate gamma distribution for last 20 matches
     #calculate number of match to build ditribution
     gamma_len = max(0, len(match) - 8)
+    
+    player_stats[35], player_stats[36], player_stats[37] = gamma.fit((match['game_home'] - match['game_away']).iloc[:8].apply(lambda x: arc.arc_n(x)).values, floc = 0)
+    
+    gamma_str_simple = []
     gamma_str = []
     gamma_str_time = []
        
-    if(gamma_len >= 8):
+    if(gamma_len > 8):
         
         #if enough to calculate distribution
         for gamma_cnt in range(0, min(20, gamma_len)):
             matches_for_gamma = get_last_matches(match, p_id, match.iloc[gamma_cnt]['date'], 20)
             #matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
+            
+            gamma_str_simple.append(calc_exp_val_8(( matches_for_gamma['game_home'] - matches_for_gamma['game_away']).iloc[:8].apply(lambda x: arc.arc_n(x)).values)[0])
             gamma_str.append(calc_weghted_discount(matches_for_gamma, elo, match.iloc[gamma_cnt]['date'], n = 20))
             gamma_str_time.append(calc_weghted_discount(matches_for_gamma, elo, match.iloc[gamma_cnt]['date'], n = 20, disc = 0.8))
             
-        player_stats[15], player_stats[16], player_stats[17] = gamma.fit(gamma_str, floc = -1)
-        player_stats[18], player_stats[19], player_stats[20] = gamma.fit(gamma_str[:8], floc = -1)
-        player_stats[27], player_stats[28], player_stats[29] = gamma.fit(gamma_str_time, floc = -1)
+        player_stats[15], player_stats[16], player_stats[17] = gamma.fit(gamma_str, floc = 0)
+        player_stats[18], player_stats[19], player_stats[20] = gamma.fit(gamma_str[:8], floc = 0)
+        player_stats[27], player_stats[28], player_stats[29] = gamma.fit(gamma_str_time, floc = 0)
+        player_stats[32], player_stats[33], player_stats[34] = gamma.fit(gamma_str_simple[:8], floc = 0)
     
     player_stats[30]= calc_exp_val_8((match['set_home_arc']).iloc[:8].values)[0]           
     player_stats[31]= calc_exp_val_8((match['set_home_arc_s']).iloc[:8].values)[0]
@@ -262,17 +270,24 @@ def calc_stats(matches, match, p_id, dt, elo, surf):
     
     match = match.apply(lambda x: swap(x, p_id), axis = 1)        
     gamma_len = max(0, len(match) - 8)
+  
+    if len(match) > 8: 
+        player_stats[41], player_stats[42], player_stats[43] = gamma.fit((match['game_home'] - match['game_away']).iloc[:8].apply(lambda x: arc.arc_n(x)).values, floc = 0)
+        
     gamma_str = []
+    gamma_str_simple = []
     
-    if(gamma_len >= 8):
+    if(gamma_len > 8):
         #if enough to calculate distribution
         for gamma_cnt in range(0, min(20, gamma_len)):
             matches_for_gamma = get_last_matches_surf(match, p_id, match.iloc[gamma_cnt]['date'], surf, 20)
             #matches_for_gamma = matches_for_gamma.apply(lambda x: swap(x, p_h), axis = 1)
+            gamma_str_simple.append(calc_exp_val_8((matches_for_gamma['game_home'] - matches_for_gamma['game_away']).iloc[:8].apply(lambda x: arc.arc_n(x)).values)[0])
             gamma_str.append(calc_weghted_discount(matches_for_gamma, elo, match.iloc[gamma_cnt]['date'], n = 20))
       
-        player_stats[21], player_stats[22], player_stats[23] = gamma.fit(gamma_str, floc = -1)
-        player_stats[24], player_stats[25], player_stats[26] = gamma.fit(gamma_str[:8], floc = -1)
+        player_stats[21], player_stats[22], player_stats[23] = gamma.fit(gamma_str, floc = 0)
+        player_stats[24], player_stats[25], player_stats[26] = gamma.fit(gamma_str[:8], floc = 0)
+        player_stats[38], player_stats[39], player_stats[40] = gamma.fit(gamma_str_simple[:8], floc = 0)
     
     
     return player_stats
@@ -280,6 +295,7 @@ def calc_stats(matches, match, p_id, dt, elo, surf):
 
 def calc(pred, matches, upd_list):
     
+    mids = []
     columns_home = ['str_home'
                    , 'str_home_d'
                    , 'str_home_rec'
@@ -312,6 +328,18 @@ def calc(pred, matches, upd_list):
                    , 'gamma_scale_h_time'
                    , 'set_score_h'
                    , 'match_score_h'
+                   , 'gamma_simple_a_h'
+                   , 'gamma_simple_loc_h'
+                   , 'gamma_simple_scale_h'
+                   , 'gamma_simplest_a_h'
+                   , 'gamma_simplest_loc_h'
+                   , 'gamma_simplest_scale_h'
+                   , 'gamma_simple_a_h_surf'
+                   , 'gamma_simple_loc_h_surf'
+                   , 'gamma_simple_scale_h_surf'
+                   , 'gamma_simplest_a_h_surf'
+                   , 'gamma_simplest_loc_h_surf'
+                   , 'gamma_simplest_scale_h_surf'
                    ]
         
     columns_away = [  'str_away'
@@ -346,6 +374,18 @@ def calc(pred, matches, upd_list):
                    , 'gamma_scale_a_time'
                    , 'set_score_a'
                    , 'match_score_a'
+                   , 'gamma_simple_a_a'
+                   , 'gamma_simple_loc_a'
+                   , 'gamma_simple_scale_a'
+                   , 'gamma_simplest_a_a'
+                   , 'gamma_simplest_loc_a'
+                   , 'gamma_simplest_scale_a'
+                   , 'gamma_simple_a_a_surf'
+                   , 'gamma_simple_loc_a_surf'
+                   , 'gamma_simple_scale_a_surf'
+                   , 'gamma_simplest_a_a_surf'
+                   , 'gamma_simplest_loc_a_surf'
+                   , 'gamma_simplest_scale_a_surf'
                    ]
         
     '''
@@ -380,13 +420,15 @@ def calc(pred, matches, upd_list):
         28 - player gamma time loc
         29 - player gamma time scale
         '''
-        
+ 
     for col in columns_home:
-        pred[col] = 0.
+        if col not in pred.columns:
+            pred[col] = 0.
     
     for col in columns_away:
-        pred[col] = 0.
-        
+        if col not in pred.columns:
+            pred[col] = 0.
+     
     ii = 0        
     for i in upd_list:#len(matches)
         
@@ -408,6 +450,8 @@ def calc(pred, matches, upd_list):
         
         player_stats = calc_stats(matches, match, p_h, dt, pred.at[i, 'elo_away'], pred.at[i, 'surf'])
         
+        mids.append(pred.at[i, 'id_match'])
+        
         for ids, col in enumerate(columns_home):
             pred.at[m_id, col] = player_stats[ids]
           
@@ -421,7 +465,7 @@ def calc(pred, matches, upd_list):
         for ids, col in enumerate(columns_away):
             pred.at[m_id, col] = player_stats[ids]
             
-        if ii % 1000 == 0:
-            pred.to_csv('cin_elo_.csv', sep = ';', decimal=",")
+        if ii % 200 == 0:
+            pred.to_csv('data/cin_elo_.csv', sep = ';', decimal=",")
                   
-    return pred
+    return pred, mids
